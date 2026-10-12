@@ -1,0 +1,44 @@
+from flask import Flask, jsonify
+import requests
+import datetime
+import os
+
+app = Flask(__name__)
+
+API_KEY = "f6165b49e3a04755a38e56ce3e604b96"
+
+def get_quote(symbol):
+    url = f"https://api.twelvedata.com/quote?symbol={symbol}&apikey={API_KEY}"
+    try:
+        response = requests.get(url, timeout=5).json()
+        price = float(response.get('close', 0.0))
+        open_price = float(response.get('open', price))
+        pct_change = ((price - open_price) / open_price) * 100.0 if open_price > 0 else 0.0
+        return round(price, 2), round(pct_change, 2)
+    except Exception as e:
+        return 0.0, 0.0
+
+@app.route('/markets', methods=['GET'])
+def markets():
+    aex, aex_pct = get_quote("AEX")
+    amx, amx_pct = get_quote("AMX")
+    sp500, sp500_pct = get_quote("NDX")
+    nasdaq, nasdaq_pct = get_quote("IXIC")
+
+    now = datetime.datetime.now().strftime("%H:%M:%S")
+
+    return jsonify({
+        "aex": aex,
+        "aex_pct": aex_pct,
+        "amx": amx,
+        "amx_pct": amx_pct,
+        "sp500": sp500,
+        "sp500_pct": sp500_pct,
+        "nasdaq": nasdaq,
+        "nasdaq_pct": nasdaq_pct,
+        "timestamp": now
+    })
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
