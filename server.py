@@ -44,9 +44,8 @@ LAST_US_FETCH = None
 LAST_OFFLINE_CHECK = None  # Houdt de tijd bij van de laatste offline-poging
 
 def has_internet_connection():
-    """Controleert of de laptop een actieve internetverbinding heeft"""
+    """Controleert of de laptop/server een actieve internetverbinding heeft"""
     try:
-        # Test lichte verbinding met Google DNS (8.8.8.8) op poort 53
         socket.setdefaulttimeout(3)
         socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect(("8.8.8.8", 53))
         return True
@@ -85,11 +84,16 @@ def fetch_group_data(tickers):
                     if len(series) >= 2:
                         price = float(series.iloc[-1])
                         prev_close = float(series.iloc[-2])
-                        pct = ((price - prev_close) / prev_close) * 100.0
+                        
+                        # --- HIER ZITTEN DE NIEUWE BEREKENINGEN ---
+                        diff = price - prev_close                      # Verschil in EUR/USD
+                        pct = ((price - prev_close) / prev_close) * 100.0  # Percentage
+                        
                         clean_name = t.split('.')[0]
                         data_list.append({
                             "name": clean_name,
                             "price": round(price, 2),
+                            "diff": round(diff, 2),   # <-- VOOR DE ESP32
                             "pct": round(pct, 2)
                         })
                 except Exception:
@@ -105,19 +109,16 @@ def update_markets_dynamically():
 
     # 1. Controleer op internetverbinding
     if not has_internet_connection():
-        # Als we offline zijn, checken we slechts 1x per uur
         if LAST_OFFLINE_CHECK is None or (now - LAST_OFFLINE_CHECK) >= timedelta(hours=1):
             print(f"[{now.strftime('%H:%M:%S')}] WAARSCHUWING: Geen internetverbinding. Volgende controle over 1 uur.")
             LAST_OFFLINE_CHECK = now
         return
 
-    # Zodra er weer internet is, resetten we de offline-status
     LAST_OFFLINE_CHECK = None
 
     eu_is_open = check_market_open("EU")
     us_is_open = check_market_open("US")
 
-    # Dynamic intervals: 15 seconden bij OPEN, 1 uur bij GESLOTEN
     eu_interval = timedelta(seconds=15) if eu_is_open else timedelta(hours=1)
     us_interval = timedelta(seconds=15) if us_is_open else timedelta(hours=1)
 
