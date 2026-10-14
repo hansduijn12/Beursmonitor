@@ -20,7 +20,7 @@ AMX_TICKERS = [
     "PHARM.AS", "PNL.AS", "SBMO.AS", "SLIGR.AS", "VPK.AS"
 ]
 
-# NASDAQ 100 - Top 50 grootste tech- en groeibedrijven
+# NASDAQ 100 - Top 50
 NASDAQ_TICKERS = [
     "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "GOOG", "TSLA", "AVGO", "COST",
     "PEP", "CSCO", "TMUS", "ADBE", "AMD", "NFLX", "INTC", "TXN", "QCOM", "AMGN",
@@ -29,22 +29,33 @@ NASDAQ_TICKERS = [
     "ASML", "ORLY", "MAR", "CTAS", "CHTR", "PCAR", "DXCM", "ABNB", "KDP", "NXPI"
 ]
 
-# Buffers & Timestamps
+# NIEUW: Prominente globale beurzen (Japan, Hong Kong, Australië, India, etc.)
+GLOBAL_TICKERS = [
+    "^N225",   # Nikkei 225 (Japan / Tokio)
+    "^HSI",    # Hang Seng Index (Hong Kong)
+    "^AXJO",   # S&P/ASX 200 (Australië)
+    "^NSEI",   # Nifty 50 (India)
+    "^GSPTSE", # TSX Composite (Canada)
+    "^FTSE",   # FTSE 100 (Londen, VK)
+    "^GDAXI"   # DAX 40 (Duitsland)
+]
+
 CACHE_DATA = {
     "timestamp": "--:--:--",
     "aex_open": False,
     "nasdaq_open": False,
+    "global_open": False,
     "aex": [],
     "amx": [],
-    "nasdaq": []
+    "nasdaq": [],
+    "global": []
 }
 
 LAST_EU_FETCH = None
 LAST_US_FETCH = None
-LAST_OFFLINE_CHECK = None  # Houdt de tijd bij van de laatste offline-poging
+LAST_GLOBAL_FETCH = None
 
 def has_internet_connection():
-    """Controleert of de laptop/server een actieve internetverbinding heeft"""
     try:
         socket.setdefaulttimeout(3)
         socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect(("8.8.8.8", 53))
@@ -57,8 +68,6 @@ def check_market_open(market_type):
         tz = pytz.timezone('Europe/Amsterdam')
         now = datetime.now(tz)
         if now.weekday() >= 5: return False
-        holidays_eu = [(1, 1), (5, 1), (12, 25), (12, 26)]
-        if (now.month, now.day) in holidays_eu: return False
         t = now.hour + now.minute / 60.0
         return 9.0 <= t < 17.5
 
@@ -66,10 +75,16 @@ def check_market_open(market_type):
         tz = pytz.timezone('America/New_York')
         now = datetime.now(tz)
         if now.weekday() >= 5: return False
-        holidays_us = [(1, 1), (6, 19), (7, 4), (12, 25)]
-        if (now.month, now.day) in holidays_us: return False
         t = now.hour + now.minute / 60.0
-        return 9.5 <= t < 16.0 # 15:30 - 22:00 NL tijd
+        return 9.5 <= t < 16.0
+
+    elif market_type == "ASIA":
+        # Tokio / Japan (01:00 - 07:00 NL-tijd)
+        tz = pytz.timezone('Asia/Tokyo')
+        now = datetime.now(tz)
+        if now.weekday() >= 5: return False
+        t = now.hour + now.minute / 60.0
+        return 9.0 <= t < 15.0  # Japanse beurstijden
 
     return False
 
@@ -84,16 +99,14 @@ def fetch_group_data(tickers):
                     if len(series) >= 2:
                         price = float(series.iloc[-1])
                         prev_close = float(series.iloc[-2])
+                        diff = price - prev_close
+                        pct = ((price - prev_close) / prev_close) * 100.0
                         
-                        # --- HIER ZITTEN DE NIEUWE BEREKENINGEN ---
-                        diff = price - prev_close                      # Verschil in EUR/USD
-                        pct = ((price - prev_close) / prev_close) * 100.0  # Percentage
-                        
-                        clean_name = t.split('.')[0]
+                        clean_name = t.replace("^", "").split('.')[0]
                         data_list.append({
                             "name": clean_name,
                             "price": round(price, 2),
-                            "diff": round(diff, 2),   # <-- VOOR DE ESP32
+                            "diff": round(diff, 2),
                             "pct": round(pct, 2)
                         })
                 except Exception:
@@ -103,47 +116,43 @@ def fetch_group_data(tickers):
     return data_list
 
 def update_markets_dynamically():
-    global CACHE_DATA, LAST_EU_FETCH, LAST_US_FETCH, LAST_OFFLINE_CHECK
-    
+    global CACHE_DATA, LAST_EU_FETCH, LAST_US_FETCH, LAST_GLOBAL_FETCH
     now = datetime.now()
 
-    # 1. Controleer op internetverbinding
     if not has_internet_connection():
-        if LAST_OFFLINE_CHECK is None or (now - LAST_OFFLINE_CHECK) >= timedelta(hours=1):
-            print(f"[{now.strftime('%H:%M:%S')}] WAARSCHUWING: Geen internetverbinding. Volgende controle over 1 uur.")
-            LAST_OFFLINE_CHECK = now
         return
-
-    LAST_OFFLINE_CHECK = None
 
     eu_is_open = check_market_open("EU")
     us_is_open = check_market_open("US")
+    global_is_open = check_market_open("ASIA")
 
     eu_interval = timedelta(seconds=15) if eu_is_open else timedelta(hours=1)
     us_interval = timedelta(seconds=15) if us_is_open else timedelta(hours=1)
+    global_interval = timedelta(seconds=15) if global_is_open else timedelta(hours=1)
 
-    # 2. Europese markten (AEX & AMX)
     if LAST_EU_FETCH is None or (now - LAST_EU_FETCH) >= eu_interval:
-        status_text = "LIVE (15s)" if eu_is_open else "RUST (1 uur)"
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Ophalen AEX/AMX... [{status_text}]")
         aex_new = fetch_group_data(AEX_TICKERS)
         amx_new = fetch_group_data(AMX_TICKERS)
         if aex_new: CACHE_DATA["aex"] = aex_new
         if amx_new: CACHE_DATA["amx"] = amx_new
         LAST_EU_FETCH = now
 
-    # 3. NASDAQ 100 Top 50
     if LAST_US_FETCH is None or (now - LAST_US_FETCH) >= us_interval:
-        status_text = "LIVE (15s)" if us_is_open else "RUST (1 uur)"
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Ophalen NASDAQ 100... [{status_text}]")
         nasdaq_new = fetch_group_data(NASDAQ_TICKERS)
         if nasdaq_new: CACHE_DATA["nasdaq"] = nasdaq_new
         LAST_US_FETCH = now
+
+    # Haal globale/Aziatische beurzen op
+    if LAST_GLOBAL_FETCH is None or (now - LAST_GLOBAL_FETCH) >= global_interval:
+        global_new = fetch_group_data(GLOBAL_TICKERS)
+        if global_new: CACHE_DATA["global"] = global_new
+        LAST_GLOBAL_FETCH = now
 
     tz = pytz.timezone('Europe/Amsterdam')
     CACHE_DATA["timestamp"] = datetime.now(tz).strftime("%H:%M:%S")
     CACHE_DATA["aex_open"] = eu_is_open
     CACHE_DATA["nasdaq_open"] = us_is_open
+    CACHE_DATA["global_open"] = global_is_open
 
 @app.route('/markets', methods=['GET'])
 def get_markets():
