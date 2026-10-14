@@ -1,6 +1,5 @@
-flask
+Flask
+yfinance
+pytz
 requests
 gunicorn
-yfinance
-pandas
-pytz
