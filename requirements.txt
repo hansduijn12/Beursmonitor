@@ -1,5 +1,6 @@
-Flask
-yfinance
-pytz
-requests
-gunicorn
+--only-binary=:all:
+Flask==3.0.2
+yfinance==0.2.36
+pytz==2024.1
+requests==2.31.0
+gunicorn==21.2.0
