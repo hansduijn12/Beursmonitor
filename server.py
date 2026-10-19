@@ -21,7 +21,6 @@ TICKERS_NASDAQ = [
     "PEP", "CSCO", "TMUS", "AZN", "AMD", "NFLX", "INTC", "INTU", "QUALCOMM", "AMGN"
 ]
 
-# De 10 belangrijkste grondstoffen
 COMMODITIES = [
     {"name": "Goud", "ticker": "GC=F"},
     {"name": "Zilver", "ticker": "SI=F"},
@@ -35,7 +34,6 @@ COMMODITIES = [
     {"name": "Mais", "ticker": "ZC=F"}
 ]
 
-# Belangrijkste Wereldbeurzen
 GLOBAL_MARKETS = [
     {"name": "Nikkei 225", "ticker": "^N225"},
     {"name": "Hang Seng", "ticker": "^HSI"},
@@ -59,7 +57,28 @@ def is_market_open(tz_name, open_h, open_m, close_h, close_m):
     except Exception:
         return False
 
-def fetch_quotes(ticker_list):
+def fetch_single_quote(ticker_symbol, custom_name=None):
+    try:
+        t = yf.Ticker(ticker_symbol)
+        info = t.fast_info
+        price = info.last_price
+        prev_close = info.previous_close
+        if price is not None and prev_close is not None and prev_close != 0:
+            diff = price - prev_close
+            pct = (diff / prev_close) * 100.0
+            name = custom_name if custom_name else ticker_symbol.split('.')[0].replace('=F', '').replace('^', '')
+            return {
+                "name": name,
+                "fullName": custom_name if custom_name else name,
+                "price": round(price, 2),
+                "diff": round(diff, 2),
+                "pct": round(pct, 2)
+            }
+    except Exception:
+        pass
+    return None
+
+def fetch_quotes_list(ticker_list):
     results = []
     if not ticker_list:
         return results
@@ -74,7 +93,7 @@ def fetch_quotes(ticker_list):
                 if price is not None and prev_close is not None and prev_close != 0:
                     diff = price - prev_close
                     pct = (diff / prev_close) * 100.0
-                    clean_name = t.split('.')[0].replace('=F', '')
+                    clean_name = t.split('.')[0].replace('=F', '').replace('^', '')
                     results.append({
                         "name": clean_name,
                         "price": round(price, 2),
@@ -93,36 +112,27 @@ def markets():
     now_nl = datetime.now(tz_nl)
     timestamp_str = now_nl.strftime('%H:%M:%S')
 
-    # Bepaal openingstijden voor de header-indicator
     aex_open = is_market_open('Europe/Amsterdam', 9, 0, 17, 35)
     nasdaq_open = is_market_open('America/New_York', 15, 30, 22, 0)
 
-    # Ophalen van alle datafeeds (blijft 24/7 actief met laatste/actuele prijzen)
-    aex_data = fetch_quotes(TICKERS_AEX)
-    amx_data = fetch_quotes(TICKERS_AMX)
-    nasdaq_data = fetch_quotes(TICKERS_NASDAQ)
+    # 1. AEX, AMX, NASDAQ ophalen
+    aex_data = fetch_quotes_list(TICKERS_AEX)
+    amx_data = fetch_quotes_list(TICKERS_AMX)
+    nasdaq_data = fetch_quotes_list(TICKERS_NASDAQ)
 
-    # Grondstoffen
-    comm_tickers = [c["ticker"] for c in COMMODITIES]
-    comm_quotes = fetch_quotes(comm_tickers)
+    # 2. Grondstoffen ophalen
     commodities_data = []
-    for c in COMMODITIES:
-        for q in comm_quotes:
-            if c["ticker"].startswith(q["name"]):
-                q["fullName"] = c["name"]
-                commodities_data.append(q)
-                break
+    for item in COMMODITIES:
+        q = fetch_single_quote(item["ticker"], item["name"])
+        if q:
+            commodities_data.append(q)
 
-    # Wereldbeurzen
-    global_tickers = [m["ticker"] for m in GLOBAL_MARKETS]
-    global_quotes = fetch_quotes(global_tickers)
+    # 3. Wereldbeurzen ophalen
     active_globals = []
-    for m in GLOBAL_MARKETS:
-        for q in global_quotes:
-            if q["name"] == m["ticker"].replace('^', '').split('.')[0]:
-                q["fullName"] = m["name"]
-                active_globals.append(q)
-                break
+    for item in GLOBAL_MARKETS:
+        q = fetch_single_quote(item["ticker"], item["name"])
+        if q:
+            active_globals.append(q)
 
     return jsonify({
         "timestamp": timestamp_str,
