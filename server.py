@@ -1,4 +1,5 @@
 import os
+import time
 import pytz
 import yfinance as yf
 from datetime import datetime
@@ -45,6 +46,11 @@ GLOBAL_MARKETS = [
     {"name": "DAX 40", "ticker": "^GDAXI"}
 ]
 
+# CACHE INSTELLINGEN (Voorkomt timeouts naar de ESP32)
+CACHE_DATA = None
+LAST_FETCH_TIME = 0
+CACHE_DURATION_SEC = 60 
+
 def is_market_open(tz_name, open_h, open_m, close_h, close_m):
     try:
         tz = pytz.timezone(tz_name)
@@ -57,28 +63,7 @@ def is_market_open(tz_name, open_h, open_m, close_h, close_m):
     except Exception:
         return False
 
-def fetch_single_quote(ticker_symbol, custom_name=None):
-    try:
-        t = yf.Ticker(ticker_symbol)
-        info = t.fast_info
-        price = info.last_price
-        prev_close = info.previous_close
-        if price is not None and prev_close is not None and prev_close != 0:
-            diff = price - prev_close
-            pct = (diff / prev_close) * 100.0
-            name = custom_name if custom_name else ticker_symbol.split('.')[0].replace('=F', '').replace('^', '')
-            return {
-                "name": name,
-                "fullName": custom_name if custom_name else name,
-                "price": round(price, 2),
-                "diff": round(diff, 2),
-                "pct": round(pct, 2)
-            }
-    except Exception:
-        pass
-    return None
-
-def fetch_quotes_list(ticker_list):
+def fetch_quotes_batch(ticker_list):
     results = []
     if not ticker_list:
         return results
@@ -108,6 +93,13 @@ def fetch_quotes_list(ticker_list):
 
 @app.route('/markets')
 def markets():
+    global CACHE_DATA, LAST_FETCH_TIME
+    now_ts = time.time()
+
+    # Gebruik cachen als data minder dan 60s oud is
+    if CACHE_DATA and (now_ts - LAST_FETCH_TIME < CACHE_DURATION_SEC):
+        return jsonify(CACHE_DATA)
+
     tz_nl = pytz.timezone('Europe/Amsterdam')
     now_nl = datetime.now(tz_nl)
     timestamp_str = now_nl.strftime('%H:%M:%S')
@@ -115,26 +107,31 @@ def markets():
     aex_open = is_market_open('Europe/Amsterdam', 9, 0, 17, 35)
     nasdaq_open = is_market_open('America/New_York', 15, 30, 22, 0)
 
-    # 1. AEX, AMX, NASDAQ ophalen
-    aex_data = fetch_quotes_list(TICKERS_AEX)
-    amx_data = fetch_quotes_list(TICKERS_AMX)
-    nasdaq_data = fetch_quotes_list(TICKERS_NASDAQ)
+    aex_data = fetch_quotes_batch(TICKERS_AEX)
+    amx_data = fetch_quotes_batch(TICKERS_AMX)
+    nasdaq_data = fetch_quotes_batch(TICKERS_NASDAQ)
 
-    # 2. Grondstoffen ophalen
+    comm_tickers = [c["ticker"] for c in COMMODITIES]
+    comm_quotes = fetch_quotes_batch(comm_tickers)
     commodities_data = []
-    for item in COMMODITIES:
-        q = fetch_single_quote(item["ticker"], item["name"])
-        if q:
-            commodities_data.append(q)
+    for c in COMMODITIES:
+        for q in comm_quotes:
+            if c["ticker"].startswith(q["name"]):
+                q["fullName"] = c["name"]
+                commodities_data.append(q)
+                break
 
-    # 3. Wereldbeurzen ophalen
+    global_tickers = [m["ticker"] for m in GLOBAL_MARKETS]
+    global_quotes = fetch_quotes_batch(global_tickers)
     active_globals = []
-    for item in GLOBAL_MARKETS:
-        q = fetch_single_quote(item["ticker"], item["name"])
-        if q:
-            active_globals.append(q)
+    for m in GLOBAL_MARKETS:
+        for q in global_quotes:
+            if q["name"] == m["ticker"].replace('^', '').split('.')[0]:
+                q["fullName"] = m["name"]
+                active_globals.append(q)
+                break
 
-    return jsonify({
+    CACHE_DATA = {
         "timestamp": timestamp_str,
         "aex_open": aex_open,
         "nasdaq_open": nasdaq_open,
@@ -143,7 +140,10 @@ def markets():
         "nasdaq": nasdaq_data,
         "commodities": commodities_data,
         "active_global": active_globals
-    })
+    }
+    LAST_FETCH_TIME = now_ts
+
+    return jsonify(CACHE_DATA)
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
