@@ -7,6 +7,7 @@ from flask import Flask, jsonify
 
 app = Flask(__name__)
 
+# Tickers voor de 3 markten
 TICKERS_AEX = [
     "ADYEN.AS", "ASM.AS", "ASML.AS", "BESI.AS", "INGA.AS", "PRX.AS", "RELX.AS", "SHELL.AS", "UNA.AS", "ABN.AS",
     "AKZA.AS", "HEIA.AS", "KPN.AS", "NN.AS", "AD.AS", "AALB.AS", "ASRNL.AS", "IMCD.AS", "RAND.AS", "UMG.AS", "WKL.AS"
@@ -22,31 +23,7 @@ TICKERS_NASDAQ = [
     "PEP", "CSCO", "TMUS", "AZN", "AMD", "NFLX", "INTC", "INTU", "QUALCOMM", "AMGN"
 ]
 
-COMMODITIES = [
-    {"name": "Goud", "ticker": "GC=F"},
-    {"name": "Zilver", "ticker": "SI=F"},
-    {"name": "Brent Olie", "ticker": "BZ=F"},
-    {"name": "WTI Olie", "ticker": "CL=F"},
-    {"name": "Aardgas", "ticker": "NG=F"},
-    {"name": "Koper", "ticker": "HG=F"},
-    {"name": "Platina", "ticker": "PL=F"},
-    {"name": "Tarwe", "ticker": "ZW=F"},
-    {"name": "Koffie", "ticker": "KC=F"},
-    {"name": "Mais", "ticker": "ZC=F"}
-]
-
-GLOBAL_MARKETS = [
-    {"name": "Nikkei 225", "ticker": "^N225"},
-    {"name": "Hang Seng", "ticker": "^HSI"},
-    {"name": "Shanghai Comp", "ticker": "000001.SS"},
-    {"name": "ASX 200", "ticker": "^AXJO"},
-    {"name": "KOSPI", "ticker": "^KS11"},
-    {"name": "Sensex", "ticker": "^BSESN"},
-    {"name": "FTSE 100", "ticker": "^FTSE"},
-    {"name": "DAX 40", "ticker": "^GDAXI"}
-]
-
-# CACHE INSTELLINGEN (Voorkomt timeouts naar de ESP32)
+# In-memory geheugencache (voorkomt dat de ESP32 'read Timeout' krijgt)
 CACHE_DATA = None
 LAST_FETCH_TIME = 0
 CACHE_DURATION_SEC = 60 
@@ -78,11 +55,10 @@ def fetch_quotes_batch(ticker_list):
                 if price is not None and prev_close is not None and prev_close != 0:
                     diff = price - prev_close
                     pct = (diff / prev_close) * 100.0
-                    clean_name = t.split('.')[0].replace('=F', '').replace('^', '')
+                    clean_name = t.split('.')[0]
                     results.append({
                         "name": clean_name,
                         "price": round(price, 2),
-                        "diff": round(diff, 2),
                         "pct": round(pct, 2)
                     })
             except Exception:
@@ -96,7 +72,7 @@ def markets():
     global CACHE_DATA, LAST_FETCH_TIME
     now_ts = time.time()
 
-    # Gebruik cachen als data minder dan 60s oud is
+    # Als de data minder dan 60s oud is, stuur direct de cache terug
     if CACHE_DATA and (now_ts - LAST_FETCH_TIME < CACHE_DURATION_SEC):
         return jsonify(CACHE_DATA)
 
@@ -107,29 +83,10 @@ def markets():
     aex_open = is_market_open('Europe/Amsterdam', 9, 0, 17, 35)
     nasdaq_open = is_market_open('America/New_York', 15, 30, 22, 0)
 
+    # Haal altijd data op (geeft laatste slotkoersen buiten openingstijd)
     aex_data = fetch_quotes_batch(TICKERS_AEX)
     amx_data = fetch_quotes_batch(TICKERS_AMX)
     nasdaq_data = fetch_quotes_batch(TICKERS_NASDAQ)
-
-    comm_tickers = [c["ticker"] for c in COMMODITIES]
-    comm_quotes = fetch_quotes_batch(comm_tickers)
-    commodities_data = []
-    for c in COMMODITIES:
-        for q in comm_quotes:
-            if c["ticker"].startswith(q["name"]):
-                q["fullName"] = c["name"]
-                commodities_data.append(q)
-                break
-
-    global_tickers = [m["ticker"] for m in GLOBAL_MARKETS]
-    global_quotes = fetch_quotes_batch(global_tickers)
-    active_globals = []
-    for m in GLOBAL_MARKETS:
-        for q in global_quotes:
-            if q["name"] == m["ticker"].replace('^', '').split('.')[0]:
-                q["fullName"] = m["name"]
-                active_globals.append(q)
-                break
 
     CACHE_DATA = {
         "timestamp": timestamp_str,
@@ -137,9 +94,7 @@ def markets():
         "nasdaq_open": nasdaq_open,
         "aex": aex_data,
         "amx": amx_data,
-        "nasdaq": nasdaq_data,
-        "commodities": commodities_data,
-        "active_global": active_globals
+        "nasdaq": nasdaq_data
     }
     LAST_FETCH_TIME = now_ts
 
