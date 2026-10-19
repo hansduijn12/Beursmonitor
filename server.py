@@ -21,12 +21,12 @@ TICKERS_NASDAQ = [
     "PEP", "CSCO", "TMUS", "AZN", "AMD", "NFLX", "INTC", "INTU", "QUALCOMM", "AMGN"
 ]
 
-# NIEUW: De 10 belangrijkste grondstoffen (Commodities Futures)
+# De 10 belangrijkste grondstoffen
 COMMODITIES = [
     {"name": "Goud", "ticker": "GC=F"},
     {"name": "Zilver", "ticker": "SI=F"},
     {"name": "Brent Olie", "ticker": "BZ=F"},
-    {"name": "WTI Ruwe Olie", "ticker": "CL=F"},
+    {"name": "WTI Olie", "ticker": "CL=F"},
     {"name": "Aardgas", "ticker": "NG=F"},
     {"name": "Koper", "ticker": "HG=F"},
     {"name": "Platina", "ticker": "PL=F"},
@@ -35,15 +35,16 @@ COMMODITIES = [
     {"name": "Mais", "ticker": "ZC=F"}
 ]
 
+# Belangrijkste Wereldbeurzen
 GLOBAL_MARKETS = [
-    {"name": "Nikkei 225", "ticker": "^N225", "tz": "Asia/Tokyo", "open_h": 9, "open_m": 0, "close_h": 15, "close_m": 30},
-    {"name": "Hang Seng", "ticker": "^HSI", "tz": "Asia/Hong_Kong", "open_h": 9, "open_m": 30, "close_h": 16, "close_m": 0},
-    {"name": "Shanghai Comp", "ticker": "000001.SS", "tz": "Asia/Shanghai", "open_h": 9, "open_m": 30, "close_h": 15, "close_m": 0},
-    {"name": "ASX 200", "ticker": "^AXJO", "tz": "Australia/Sydney", "open_h": 10, "open_m": 0, "close_h": 16, "close_m": 0},
-    {"name": "KOSPI", "ticker": "^KS11", "tz": "Asia/Seoul", "open_h": 9, "open_m": 0, "close_h": 15, "close_m": 30},
-    {"name": "Sensex", "ticker": "^BSESN", "tz": "Asia/Kolkata", "open_h": 9, "open_m": 15, "close_h": 15, "close_m": 30},
-    {"name": "FTSE 100", "ticker": "^FTSE", "tz": "Europe/London", "open_h": 8, "open_m": 0, "close_h": 16, "close_m": 30},
-    {"name": "DAX 40", "ticker": "^GDAXI", "tz": "Europe/Berlin", "open_h": 9, "open_m": 0, "close_h": 17, "close_m": 30}
+    {"name": "Nikkei 225", "ticker": "^N225"},
+    {"name": "Hang Seng", "ticker": "^HSI"},
+    {"name": "Shanghai Comp", "ticker": "000001.SS"},
+    {"name": "ASX 200", "ticker": "^AXJO"},
+    {"name": "KOSPI", "ticker": "^KS11"},
+    {"name": "Sensex", "ticker": "^BSESN"},
+    {"name": "FTSE 100", "ticker": "^FTSE"},
+    {"name": "DAX 40", "ticker": "^GDAXI"}
 ]
 
 def is_market_open(tz_name, open_h, open_m, close_h, close_m):
@@ -92,14 +93,16 @@ def markets():
     now_nl = datetime.now(tz_nl)
     timestamp_str = now_nl.strftime('%H:%M:%S')
 
+    # Bepaal openingstijden voor de header-indicator
     aex_open = is_market_open('Europe/Amsterdam', 9, 0, 17, 35)
-    nasdaq_open = is_market_open('America/New_York', 9, 30, 16, 0)
+    nasdaq_open = is_market_open('America/New_York', 15, 30, 22, 0)
 
+    # Ophalen van alle datafeeds (blijft 24/7 actief met laatste/actuele prijzen)
     aex_data = fetch_quotes(TICKERS_AEX)
     amx_data = fetch_quotes(TICKERS_AMX)
     nasdaq_data = fetch_quotes(TICKERS_NASDAQ)
 
-    # Grondstoffen ophalen
+    # Grondstoffen
     comm_tickers = [c["ticker"] for c in COMMODITIES]
     comm_quotes = fetch_quotes(comm_tickers)
     commodities_data = []
@@ -110,14 +113,16 @@ def markets():
                 commodities_data.append(q)
                 break
 
+    # Wereldbeurzen
+    global_tickers = [m["ticker"] for m in GLOBAL_MARKETS]
+    global_quotes = fetch_quotes(global_tickers)
     active_globals = []
     for m in GLOBAL_MARKETS:
-        if is_market_open(m["tz"], m["open_h"], m["open_m"], m["close_h"], m["close_m"]):
-            quotes = fetch_quotes([m["ticker"]])
-            if quotes:
-                q = quotes[0]
+        for q in global_quotes:
+            if q["name"] == m["ticker"].replace('^', '').split('.')[0]:
                 q["fullName"] = m["name"]
                 active_globals.append(q)
+                break
 
     return jsonify({
         "timestamp": timestamp_str,
@@ -126,7 +131,7 @@ def markets():
         "aex": aex_data,
         "amx": amx_data,
         "nasdaq": nasdaq_data,
-        "commodities": commodities_data,  # <-- NIEUWE CATEGORIE
+        "commodities": commodities_data,
         "active_global": active_globals
     })
 
