@@ -1,171 +1,135 @@
-from flask import Flask, jsonify
-import yfinance as yf
-from datetime import datetime, timedelta
+import os
 import pytz
-import socket
+import yfinance as yf
+from datetime import datetime
+from flask import Flask, jsonify
 
 app = Flask(__name__)
 
-# Tickers AEX & AMX (Euronext Amsterdam)
-AEX_TICKERS = [
-    "ADYEN.AS", "ASM.AS", "ASML.AS", "BESI.AS", "INGA.AS", "PRX.AS", "REN.AS", 
-    "SHELL.AS", "UNA.AS", "ABN.AS", "AKZA.AS", "HEIA.AS", "KPN.AS", "NN.AS", 
-    "AD.AS", "AALB.AS", "ASRNL.AS", "IMCD.AS", "RAND.AS", "UMG.AS", 
-    "WKL.AS", "ARCAD.AS", "ENX.PA", "LIGHT.AS"
+TICKERS_AEX = [
+    "ADYEN.AS", "ASM.AS", "ASML.AS", "BESI.AS", "INGA.AS", "PRX.AS", "RELX.AS", "SHELL.AS", "UNA.AS", "ABN.AS",
+    "AKZA.AS", "HEIA.AS", "KPN.AS", "NN.AS", "AD.AS", "AALB.AS", "ASRNL.AS", "IMCD.AS", "RAND.AS", "UMG.AS", "WKL.AS"
 ]
 
-AMX_TICKERS = [
-    "ALLFG.AS", "APAM.AS", "BAMNB.AS", "CRBN.AS", "ECMPA.AS", "FLOW.AS", 
-    "FUR.AS", "INPST.AS", "JDEPY", "NEDAP.AS", "OCI.AS", 
-    "PHARM.AS", "PNL.AS", "SBMO.AS", "SLIGR.AS", "VPK.AS"
+TICKERS_AMX = [
+    "ALLFG.AS", "APAM.AS", "ARCAD.AS", "BAMNB.AS", "CORB.AS", "ECMPA.AS", "ENX.PA", "FLOW.AS", "FUR.AS", "INPST.AS",
+    "JDEP.AS", "LIGHT.AS", "NEDAP.AS", "OCI.AS", "PHARM.AS", "PNL.AS", "SBMO.AS", "SLIGR.AS", "VPK.AS"
 ]
 
-# NASDAQ 100 - Top 50
-NASDAQ_TICKERS = [
-    "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "GOOG", "TSLA", "AVGO", "COST",
-    "PEP", "CSCO", "TMUS", "ADBE", "AMD", "NFLX", "INTC", "TXN", "QCOM", "AMGN",
-    "HON", "INTU", "AMAT", "BKNG", "SBUX", "ISRG", "GILD", "MDLZ", "LRCX", "ADI",
-    "REGN", "VRTX", "ADP", "PANW", "MU", "SNPS", "CDNS", "CSX", "PYPL", "KLAC",
-    "ASML", "ORLY", "MAR", "CTAS", "CHTR", "PCAR", "DXCM", "ABNB", "KDP", "NXPI"
+TICKERS_NASDAQ = [
+    "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "AVGO", "COST", "ASML",
+    "PEP", "CSCO", "TMUS", "AZN", "AMD", "NFLX", "INTC", "INTU", "QUALCOMM", "AMGN"
 ]
 
-# PROMINENTE WERELDBEURZEN & HUN TIJDZONES / BEURSTIJDEN
+# NIEUW: De 10 belangrijkste grondstoffen (Commodities Futures)
+COMMODITIES = [
+    {"name": "Goud", "ticker": "GC=F"},
+    {"name": "Zilver", "ticker": "SI=F"},
+    {"name": "Brent Olie", "ticker": "BZ=F"},
+    {"name": "WTI Ruwe Olie", "ticker": "CL=F"},
+    {"name": "Aardgas", "ticker": "NG=F"},
+    {"name": "Koper", "ticker": "HG=F"},
+    {"name": "Platina", "ticker": "PL=F"},
+    {"name": "Tarwe", "ticker": "ZW=F"},
+    {"name": "Koffie", "ticker": "KC=F"},
+    {"name": "Mais", "ticker": "ZC=F"}
+]
+
 GLOBAL_MARKETS = [
-    {"ticker": "^N225",   "name": "Nikkei 225 (Japan)",     "tz": "Asia/Tokyo",        "open": 9.0,  "close": 15.0},
-    {"ticker": "^HSI",    "name": "Hang Seng (Hong Kong)",  "tz": "Asia/Hong_Kong",    "open": 9.5,  "close": 16.0},
-    {"ticker": "^AXJO",   "name": "ASX 200 (Australie)",   "tz": "Australia/Sydney",  "open": 10.0, "close": 16.0},
-    {"ticker": "^NSEI",   "name": "Nifty 50 (India)",       "tz": "Asia/Kolkata",      "open": 9.25, "close": 15.5},
-    {"ticker": "^FTSE",   "name": "FTSE 100 (Londen)",      "tz": "Europe/London",     "open": 8.0,  "close": 16.5},
-    {"ticker": "^GDAXI",  "name": "DAX 40 (Duitsland)",     "tz": "Europe/Berlin",     "open": 9.0,  "close": 17.5},
-    {"ticker": "^GSPTSE", "name": "TSX Comp. (Canada)",     "tz": "America/Toronto",   "open": 9.5,  "close": 16.0}
+    {"name": "Nikkei 225", "ticker": "^N225", "tz": "Asia/Tokyo", "open_h": 9, "open_m": 0, "close_h": 15, "close_m": 30},
+    {"name": "Hang Seng", "ticker": "^HSI", "tz": "Asia/Hong_Kong", "open_h": 9, "open_m": 30, "close_h": 16, "close_m": 0},
+    {"name": "Shanghai Comp", "ticker": "000001.SS", "tz": "Asia/Shanghai", "open_h": 9, "open_m": 30, "close_h": 15, "close_m": 0},
+    {"name": "ASX 200", "ticker": "^AXJO", "tz": "Australia/Sydney", "open_h": 10, "open_m": 0, "close_h": 16, "close_m": 0},
+    {"name": "KOSPI", "ticker": "^KS11", "tz": "Asia/Seoul", "open_h": 9, "open_m": 0, "close_h": 15, "close_m": 30},
+    {"name": "Sensex", "ticker": "^BSESN", "tz": "Asia/Kolkata", "open_h": 9, "open_m": 15, "close_h": 15, "close_m": 30},
+    {"name": "FTSE 100", "ticker": "^FTSE", "tz": "Europe/London", "open_h": 8, "open_m": 0, "close_h": 16, "close_m": 30},
+    {"name": "DAX 40", "ticker": "^GDAXI", "tz": "Europe/Berlin", "open_h": 9, "open_m": 0, "close_h": 17, "close_m": 30}
 ]
 
-CACHE_DATA = {
-    "timestamp": "--:--:--",
-    "aex_open": False,
-    "nasdaq_open": False,
-    "aex": [],
-    "amx": [],
-    "nasdaq": [],
-    "active_global": []  # Bevat alleen prominente beurzen die NU open zijn
-}
-
-LAST_EU_FETCH = None
-LAST_US_FETCH = None
-LAST_GLOBAL_FETCH = None
-
-def has_internet_connection():
+def is_market_open(tz_name, open_h, open_m, close_h, close_m):
     try:
-        socket.setdefaulttimeout(3)
-        socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect(("8.8.8.8", 53))
-        return True
+        tz = pytz.timezone(tz_name)
+        now = datetime.now(tz)
+        if now.weekday() >= 5:
+            return False
+        start = now.replace(hour=open_h, minute=open_m, second=0, microsecond=0)
+        end = now.replace(hour=close_h, minute=close_m, second=0, microsecond=0)
+        return start <= now <= end
     except Exception:
         return False
 
-def check_market_open(market_type):
-    if market_type == "EU":
-        tz = pytz.timezone('Europe/Amsterdam')
-        now = datetime.now(tz)
-        if now.weekday() >= 5: return False
-        t = now.hour + now.minute / 60.0
-        return 9.0 <= t < 17.5
-
-    elif market_type == "US":
-        tz = pytz.timezone('America/New_York')
-        now = datetime.now(tz)
-        if now.weekday() >= 5: return False
-        t = now.hour + now.minute / 60.0
-        return 9.5 <= t < 16.0
-
-    return False
-
-def is_global_market_open(m_info):
+def fetch_quotes(ticker_list):
+    results = []
+    if not ticker_list:
+        return results
     try:
-        tz = pytz.timezone(m_info["tz"])
-        now = datetime.now(tz)
-        if now.weekday() >= 5: return False
-        t = now.hour + now.minute / 60.0
-        return m_info["open"] <= t < m_info["close"]
+        tickers_str = " ".join(ticker_list)
+        data = yf.Tickers(tickers_str)
+        for t in ticker_list:
+            try:
+                info = data.tickers[t].fast_info
+                price = info.last_price
+                prev_close = info.previous_close
+                if price is not None and prev_close is not None and prev_close != 0:
+                    diff = price - prev_close
+                    pct = (diff / prev_close) * 100.0
+                    clean_name = t.split('.')[0].replace('=F', '')
+                    results.append({
+                        "name": clean_name,
+                        "price": round(price, 2),
+                        "diff": round(diff, 2),
+                        "pct": round(pct, 2)
+                    })
+            except Exception:
+                continue
     except Exception:
-        return False
+        pass
+    return results
 
-def fetch_group_data(tickers):
-    data_list = []
-    try:
-        df = yf.download(tickers, period="5d", interval="1d", progress=False)['Close']
-        if not df.empty:
-            for t in tickers:
-                try:
-                    series = df[t].dropna() if len(tickers) > 1 else df.dropna()
-                    if len(series) >= 2:
-                        price = float(series.iloc[-1])
-                        prev_close = float(series.iloc[-2])
-                        diff = price - prev_close
-                        pct = ((price - prev_close) / prev_close) * 100.0
-                        
-                        clean_name = t.replace("^", "").split('.')[0]
-                        data_list.append({
-                            "name": clean_name,
-                            "price": round(price, 2),
-                            "diff": round(diff, 2),
-                            "pct": round(pct, 2)
-                        })
-                except Exception:
-                    continue
-    except Exception as e:
-        print(f"Fout bij ophalen: {e}")
-    return data_list
+@app.route('/markets')
+def markets():
+    tz_nl = pytz.timezone('Europe/Amsterdam')
+    now_nl = datetime.now(tz_nl)
+    timestamp_str = now_nl.strftime('%H:%M:%S')
 
-def update_markets_dynamically():
-    global CACHE_DATA, LAST_EU_FETCH, LAST_US_FETCH, LAST_GLOBAL_FETCH
-    now = datetime.now()
+    aex_open = is_market_open('Europe/Amsterdam', 9, 0, 17, 35)
+    nasdaq_open = is_market_open('America/New_York', 9, 30, 16, 0)
 
-    if not has_internet_connection():
-        return
+    aex_data = fetch_quotes(TICKERS_AEX)
+    amx_data = fetch_quotes(TICKERS_AMX)
+    nasdaq_data = fetch_quotes(TICKERS_NASDAQ)
 
-    eu_is_open = check_market_open("EU")
-    us_is_open = check_market_open("US")
+    # Grondstoffen ophalen
+    comm_tickers = [c["ticker"] for c in COMMODITIES]
+    comm_quotes = fetch_quotes(comm_tickers)
+    commodities_data = []
+    for c in COMMODITIES:
+        for q in comm_quotes:
+            if c["ticker"].startswith(q["name"]):
+                q["fullName"] = c["name"]
+                commodities_data.append(q)
+                break
 
-    eu_interval = timedelta(seconds=15) if eu_is_open else timedelta(hours=1)
-    us_interval = timedelta(seconds=15) if us_is_open else timedelta(hours=1)
+    active_globals = []
+    for m in GLOBAL_MARKETS:
+        if is_market_open(m["tz"], m["open_h"], m["open_m"], m["close_h"], m["close_m"]):
+            quotes = fetch_quotes([m["ticker"]])
+            if quotes:
+                q = quotes[0]
+                q["fullName"] = m["name"]
+                active_globals.append(q)
 
-    if LAST_EU_FETCH is None or (now - LAST_EU_FETCH) >= eu_interval:
-        aex_new = fetch_group_data(AEX_TICKERS)
-        amx_new = fetch_group_data(AMX_TICKERS)
-        if aex_new: CACHE_DATA["aex"] = aex_new
-        if amx_new: CACHE_DATA["amx"] = amx_new
-        LAST_EU_FETCH = now
-
-    if LAST_US_FETCH is None or (now - LAST_US_FETCH) >= us_interval:
-        nasdaq_new = fetch_group_data(NASDAQ_TICKERS)
-        if nasdaq_new: CACHE_DATA["nasdaq"] = nasdaq_new
-        LAST_US_FETCH = now
-
-    # Haal data op van alle actieve wereldbeurzen
-    if LAST_GLOBAL_FETCH is None or (now - LAST_GLOBAL_FETCH) >= timedelta(seconds=30):
-        active_tickers = [m["ticker"] for m in GLOBAL_MARKETS if is_global_market_open(m)]
-        
-        if active_tickers:
-            glob_data = fetch_group_data(active_tickers)
-            # Voeg mooie namen toe
-            for item in glob_data:
-                for m in GLOBAL_MARKETS:
-                    if m["ticker"].replace("^", "") == item["name"]:
-                        item["fullName"] = m["name"]
-            CACHE_DATA["active_global"] = glob_data
-        else:
-            CACHE_DATA["active_global"] = []
-        LAST_GLOBAL_FETCH = now
-
-    tz = pytz.timezone('Europe/Amsterdam')
-    CACHE_DATA["timestamp"] = datetime.now(tz).strftime("%H:%M:%S")
-    CACHE_DATA["aex_open"] = eu_is_open
-    CACHE_DATA["nasdaq_open"] = us_is_open
-
-@app.route('/markets', methods=['GET'])
-def get_markets():
-    update_markets_dynamically()
-    return jsonify(CACHE_DATA)
+    return jsonify({
+        "timestamp": timestamp_str,
+        "aex_open": aex_open,
+        "nasdaq_open": nasdaq_open,
+        "aex": aex_data,
+        "amx": amx_data,
+        "nasdaq": nasdaq_data,
+        "commodities": commodities_data,  # <-- NIEUWE CATEGORIE
+        "active_global": active_globals
+    })
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
