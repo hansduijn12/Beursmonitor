@@ -38,7 +38,6 @@ COMMODITIES = [
     {"name": "Koffie", "ticker": "KC=F"}
 ]
 
-# NACHTBEURZEN GEGROEPEERD PER LAND
 GLOBAL_MARKETS = [
     {"country": "JAPAN", "name": "Nikkei 225", "ticker": "^N225"},
     {"country": "JAPAN", "name": "TOPIX Index", "ticker": "^TOPX"},
