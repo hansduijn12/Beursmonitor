@@ -17,22 +17,27 @@ TICKERS_AMX = [
     "JDEP.AS", "LIGHT.AS", "NEDAP.AS", "OCI.AS", "PHARM.AS", "PNL.AS", "SBMO.AS", "SLIGR.AS", "VPK.AS"
 ]
 
+# NASDAQ TOP 50
 TICKERS_NASDAQ = [
     "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "AVGO", "COST", "ASML",
-    "PEP", "CSCO", "TMUS", "AZN", "AMD", "NFLX", "INTC", "INTU", "QUALCOMM", "AMGN"
+    "PEP", "CSCO", "TMUS", "AZN", "AMD", "NFLX", "INTC", "INTU", "QUALCOMM", "AMGN",
+    "TXN", "HON", "AMAT", "BKNG", "SBUX", "VRTX", "MDLZ", "ADP", "ISRG", "GILD",
+    "REGN", "ADI", "LRCX", "MU", "MELI", "PANW", "SNPS", "CDNS", "KLAC", "PYPL",
+    "CRWD", "ABNB", "ORLY", "MAR", "CTAS", "CHTR", "CSX", "WDAY", "DXCM", "FTNT"
 ]
 
+# GRONDSTOFFEN (WORLD SPOT / FUTURES)
 COMMODITIES = [
-    {"name": "Goud", "ticker": "GC=F"},
-    {"name": "Zilver", "ticker": "SI=F"},
-    {"name": "Brent Olie", "ticker": "BZ=F"},
-    {"name": "WTI Olie", "ticker": "CL=F"},
-    {"name": "Aardgas", "ticker": "NG=F"},
-    {"name": "Koper", "ticker": "HG=F"},
-    {"name": "Platina", "ticker": "PL=F"},
-    {"name": "Tarwe", "ticker": "ZW=F"},
-    {"name": "Koffie", "ticker": "KC=F"},
-    {"name": "Mais", "ticker": "ZC=F"}
+    {"name": "Goud Spot", "ticker": "GC=F"},
+    {"name": "Zilver Spot", "ticker": "SI=F"},
+    {"name": "Platina Spot", "ticker": "PL=F"},
+    {"name": "Palladium Spot", "ticker": "PA=F"},
+    {"name": "Brent Ruwe Olie", "ticker": "BZ=F"},
+    {"name": "WTI Ruwe Olie", "ticker": "CL=F"},
+    {"name": "Aardgas Spot", "ticker": "NG=F"},
+    {"name": "Koper Spot", "ticker": "HG=F"},
+    {"name": "Tarwe Futures", "ticker": "ZW=F"},
+    {"name": "Koffie Futures", "ticker": "KC=F"}
 ]
 
 GLOBAL_MARKETS = [
@@ -63,19 +68,14 @@ def is_market_open(tz_name, open_h, open_m, close_h, close_m):
         return False
 
 def is_market_visible(tz_name, open_h, open_m, close_h, close_m):
-    """
-    Zichtbaar tijdens openingstijd en tot maximaal 1 uur na sluitingstijd.
-    """
     try:
         tz = pytz.timezone(tz_name)
         now = datetime.now(tz)
-        if now.weekday() >= 5: # Weekend = gesloten
+        if now.weekday() >= 5:
             return False
-        
         start = now.replace(hour=open_h, minute=open_m, second=0, microsecond=0)
         close_time = now.replace(hour=close_h, minute=close_m, second=0, microsecond=0)
         hide_time = close_time + timedelta(hours=1)
-        
         return start <= now <= hide_time
     except Exception:
         return True
@@ -137,7 +137,7 @@ def markets():
     commodities_data = []
     for c in COMMODITIES:
         for q in comm_quotes:
-            if c["ticker"].startswith(q["name"]):
+            if c["ticker"].startswith(q["name"]) or q["name"] in c["ticker"]:
                 q["fullName"] = c["name"]
                 commodities_data.append(q)
                 break
