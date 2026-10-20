@@ -17,7 +17,6 @@ TICKERS_AMX = [
     "JDEP.AS", "LIGHT.AS", "NEDAP.AS", "OCI.AS", "PHARM.AS", "PNL.AS", "SBMO.AS", "SLIGR.AS", "VPK.AS"
 ]
 
-# NASDAQ TOP 50
 TICKERS_NASDAQ = [
     "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "AVGO", "COST", "ASML",
     "PEP", "CSCO", "TMUS", "AZN", "AMD", "NFLX", "INTC", "INTU", "QUALCOMM", "AMGN",
@@ -26,29 +25,29 @@ TICKERS_NASDAQ = [
     "CRWD", "ABNB", "ORLY", "MAR", "CTAS", "CHTR", "CSX", "WDAY", "DXCM", "FTNT"
 ]
 
-# GRONDSTOFFEN (WORLD SPOT / FUTURES)
 COMMODITIES = [
-    {"name": "Goud Spot", "ticker": "GC=F"},
-    {"name": "Zilver Spot", "ticker": "SI=F"},
-    {"name": "Platina Spot", "ticker": "PL=F"},
-    {"name": "Palladium Spot", "ticker": "PA=F"},
-    {"name": "Brent Ruwe Olie", "ticker": "BZ=F"},
-    {"name": "WTI Ruwe Olie", "ticker": "CL=F"},
-    {"name": "Aardgas Spot", "ticker": "NG=F"},
-    {"name": "Koper Spot", "ticker": "HG=F"},
-    {"name": "Tarwe Futures", "ticker": "ZW=F"},
-    {"name": "Koffie Futures", "ticker": "KC=F"}
+    {"name": "Goud", "ticker": "GC=F"},
+    {"name": "Zilver", "ticker": "SI=F"},
+    {"name": "Platina", "ticker": "PL=F"},
+    {"name": "Palladium", "ticker": "PA=F"},
+    {"name": "Brent Olie", "ticker": "BZ=F"},
+    {"name": "WTI Olie", "ticker": "CL=F"},
+    {"name": "Aardgas", "ticker": "NG=F"},
+    {"name": "Koper", "ticker": "HG=F"},
+    {"name": "Tarwe", "ticker": "ZW=F"},
+    {"name": "Koffie", "ticker": "KC=F"}
 ]
 
+# NACHTBEURZEN GEGROEPEERD PER LAND
 GLOBAL_MARKETS = [
-    {"name": "Nikkei 225", "ticker": "^N225"},
-    {"name": "Hang Seng", "ticker": "^HSI"},
-    {"name": "Shanghai Comp", "ticker": "000001.SS"},
-    {"name": "ASX 200", "ticker": "^AXJO"},
-    {"name": "KOSPI", "ticker": "^KS11"},
-    {"name": "Sensex", "ticker": "^BSESN"},
-    {"name": "FTSE 100", "ticker": "^FTSE"},
-    {"name": "DAX 40", "ticker": "^GDAXI"}
+    {"country": "JAPAN", "name": "Nikkei 225", "ticker": "^N225"},
+    {"country": "JAPAN", "name": "TOPIX Index", "ticker": "^TOPX"},
+    {"country": "CHINA & HK", "name": "Hang Seng", "ticker": "^HSI"},
+    {"country": "CHINA & HK", "name": "Shanghai Comp", "ticker": "000001.SS"},
+    {"country": "AUSTRALIE", "name": "ASX 200", "ticker": "^AXJO"},
+    {"country": "ZUID-KOREA", "name": "KOSPI Composite", "ticker": "^KS11"},
+    {"country": "INDIA", "name": "BSE Sensex", "ticker": "^BSESN"},
+    {"country": "INDIA", "name": "NSE Nifty 50", "ticker": "^NSEI"}
 ]
 
 CACHE_DATA = None
@@ -147,8 +146,11 @@ def markets():
     active_globals = []
     for m in GLOBAL_MARKETS:
         for q in global_quotes:
-            if q["name"] == m["ticker"].replace('^', '').split('.')[0]:
+            clean_q = q["name"].replace('^', '').split('.')[0]
+            clean_m = m["ticker"].replace('^', '').split('.')[0]
+            if clean_q == clean_m or m["ticker"] == q["name"]:
                 q["fullName"] = m["name"]
+                q["country"] = m["country"]
                 active_globals.append(q)
                 break
 
