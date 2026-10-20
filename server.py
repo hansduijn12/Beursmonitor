@@ -7,7 +7,6 @@ from flask import Flask, jsonify
 
 app = Flask(__name__)
 
-# Tickers voor de 3 markten
 TICKERS_AEX = [
     "ADYEN.AS", "ASM.AS", "ASML.AS", "BESI.AS", "INGA.AS", "PRX.AS", "RELX.AS", "SHELL.AS", "UNA.AS", "ABN.AS",
     "AKZA.AS", "HEIA.AS", "KPN.AS", "NN.AS", "AD.AS", "AALB.AS", "ASRNL.AS", "IMCD.AS", "RAND.AS", "UMG.AS", "WKL.AS"
@@ -23,22 +22,9 @@ TICKERS_NASDAQ = [
     "PEP", "CSCO", "TMUS", "AZN", "AMD", "NFLX", "INTC", "INTU", "QUALCOMM", "AMGN"
 ]
 
-# In-memory geheugencache (voorkomt dat de ESP32 'read Timeout' krijgt)
 CACHE_DATA = None
 LAST_FETCH_TIME = 0
 CACHE_DURATION_SEC = 60 
-
-def is_market_open(tz_name, open_h, open_m, close_h, close_m):
-    try:
-        tz = pytz.timezone(tz_name)
-        now = datetime.now(tz)
-        if now.weekday() >= 5:
-            return False
-        start = now.replace(hour=open_h, minute=open_m, second=0, microsecond=0)
-        end = now.replace(hour=close_h, minute=close_m, second=0, microsecond=0)
-        return start <= now <= end
-    except Exception:
-        return False
 
 def fetch_quotes_batch(ticker_list):
     results = []
@@ -58,8 +44,10 @@ def fetch_quotes_batch(ticker_list):
                     clean_name = t.split('.')[0]
                     results.append({
                         "name": clean_name,
-                        "price": round(price, 2),
-                        "pct": round(pct, 2)
+                        "fullName": clean_name,
+                        "price": round(float(price), 2),
+                        "diff": round(float(diff), 2),
+                        "pct": round(float(pct), 2)
                     })
             except Exception:
                 continue
@@ -72,7 +60,6 @@ def markets():
     global CACHE_DATA, LAST_FETCH_TIME
     now_ts = time.time()
 
-    # Als de data minder dan 60s oud is, stuur direct de cache terug
     if CACHE_DATA and (now_ts - LAST_FETCH_TIME < CACHE_DURATION_SEC):
         return jsonify(CACHE_DATA)
 
@@ -80,18 +67,14 @@ def markets():
     now_nl = datetime.now(tz_nl)
     timestamp_str = now_nl.strftime('%H:%M:%S')
 
-    aex_open = is_market_open('Europe/Amsterdam', 9, 0, 17, 35)
-    nasdaq_open = is_market_open('America/New_York', 15, 30, 22, 0)
-
-    # Haal altijd data op (geeft laatste slotkoersen buiten openingstijd)
     aex_data = fetch_quotes_batch(TICKERS_AEX)
     amx_data = fetch_quotes_batch(TICKERS_AMX)
     nasdaq_data = fetch_quotes_batch(TICKERS_NASDAQ)
 
     CACHE_DATA = {
         "timestamp": timestamp_str,
-        "aex_open": aex_open,
-        "nasdaq_open": nasdaq_open,
+        "aex_open": True,
+        "nasdaq_open": True,
         "aex": aex_data,
         "amx": amx_data,
         "nasdaq": nasdaq_data
