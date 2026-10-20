@@ -51,7 +51,6 @@ LAST_FETCH_TIME = 0
 CACHE_DURATION_SEC = 60 
 
 def is_market_open(tz_name, open_h, open_m, close_h, close_m):
-    """ Bepaalt of de beurs momenteel open is. """
     try:
         tz = pytz.timezone(tz_name)
         now = datetime.now(tz)
@@ -65,20 +64,18 @@ def is_market_open(tz_name, open_h, open_m, close_h, close_m):
 
 def is_market_visible(tz_name, open_h, open_m, close_h, close_m):
     """
-    Bepaalt of de beurs getoond moet worden.
-    Zodra de beurs meer dan 1 uur gesloten is, geeft deze False terug.
+    Zichtbaar tijdens openingstijd en tot maximaal 1 uur na sluitingstijd.
     """
     try:
         tz = pytz.timezone(tz_name)
         now = datetime.now(tz)
-        if now.weekday() >= 5: # In het weekend gesloten
+        if now.weekday() >= 5: # Weekend = gesloten
             return False
         
         start = now.replace(hour=open_h, minute=open_m, second=0, microsecond=0)
         close_time = now.replace(hour=close_h, minute=close_m, second=0, microsecond=0)
-        hide_time = close_time + timedelta(hours=1) # 1 uur na sluitingstijd
+        hide_time = close_time + timedelta(hours=1)
         
-        # Zichtbaar vanaf openingstijd tot 1 uur na sluitingstijd
         return start <= now <= hide_time
     except Exception:
         return True
@@ -100,12 +97,9 @@ def fetch_quotes_batch(ticker_list):
                     pct = (diff / prev_close) * 100.0
                     clean_name = t.split('.')[0].replace('=F', '').replace('^', '')
                     
-                    # Probeer de volledige naam van de ticker op te halen als die bestaat
-                    full_name = getattr(info, 'short_name', None) or getattr(info, 'long_name', None) or clean_name
-                    
                     results.append({
                         "name": clean_name,
-                        "fullName": full_name,
+                        "fullName": clean_name,
                         "price": round(float(price), 2),
                         "diff": round(float(diff), 2),
                         "pct": round(float(pct), 2)
@@ -131,16 +125,13 @@ def markets():
     aex_open = is_market_open('Europe/Amsterdam', 9, 0, 17, 35)
     nasdaq_open = is_market_open('America/New_York', 15, 30, 22, 0)
 
-    # Controleer of de markten nog zichtbaar mogen zijn (tot max 1 uur na sluitingstijd)
     aex_visible = is_market_visible('Europe/Amsterdam', 9, 0, 17, 35)
     nasdaq_visible = is_market_visible('America/New_York', 15, 30, 22, 0)
 
-    # Haal alleen data op als de markt nog binnen het zichtbare venster valt
     aex_data = fetch_quotes_batch(TICKERS_AEX) if aex_visible else []
     amx_data = fetch_quotes_batch(TICKERS_AMX) if aex_visible else []
     nasdaq_data = fetch_quotes_batch(TICKERS_NASDAQ) if nasdaq_visible else []
 
-    # Grondstoffen en Wereldbeurzen blijven altijd zichtbaar
     comm_tickers = [c["ticker"] for c in COMMODITIES]
     comm_quotes = fetch_quotes_batch(comm_tickers)
     commodities_data = []
