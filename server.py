@@ -120,11 +120,13 @@ def markets():
     now_nl = datetime.now(tz_nl)
     timestamp_str = now_nl.strftime('%H:%M:%S')
 
+    # AEX/AMX in Amsterdamse tijd (09:00 - 17:35)
     aex_open = is_market_open('Europe/Amsterdam', 9, 0, 17, 35)
-    nasdaq_open = is_market_open('America/New_York', 15, 30, 22, 0)
-
     aex_visible = is_market_visible('Europe/Amsterdam', 9, 0, 17, 35)
-    nasdaq_visible = is_market_visible('America/New_York', 15, 30, 22, 0)
+
+    # NASDAQ in New Yorkse tijd (09:30 - 16:00 ET)
+    nasdaq_open = is_market_open('America/New_York', 9, 30, 16, 0)
+    nasdaq_visible = is_market_visible('America/New_York', 9, 30, 16, 0)
 
     aex_data = fetch_quotes_batch(TICKERS_AEX) if aex_visible else []
     amx_data = fetch_quotes_batch(TICKERS_AMX) if aex_visible else []
