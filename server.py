@@ -157,6 +157,7 @@ def markets():
 
     CACHE_DATA = {
         "timestamp": timestamp_str,
+        "server_time": int(now_ts),
         "aex_open": aex_open,
         "nasdaq_open": nasdaq_open,
         "aex": aex_data,
