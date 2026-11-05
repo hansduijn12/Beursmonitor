@@ -95,9 +95,9 @@ def fetch_quotes_batch(ticker_list):
                     pct = (diff / prev_close) * 100.0
                     clean_name = t.split('.')[0].replace('=F', '').replace('^', '')
                     
+                    # 'fullName' is hier bewust weggelaten zodat de ESP32 getFullName() gebruikt
                     results.append({
                         "name": clean_name,
-                        "fullName": clean_name,
                         "price": round(float(price), 2),
                         "diff": round(float(diff), 2),
                         "pct": round(float(pct), 2)
